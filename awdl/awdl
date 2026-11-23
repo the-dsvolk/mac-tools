@@ -1,0 +1,57 @@
+#!/bin/bash
+# awdl — allow or block AWDL (AirDrop, Handoff, Universal Control, Sidecar) via awdl-guard.
+#
+#   awdl on [MINUTES]   allow AWDL for MINUTES (default 10); awdl-guard then takes it down again
+#   awdl off            block AWDL now
+#   awdl status         guard running?, awdl0 up/down, time left in the allow window
+#
+# No sudo: this only writes the allow file that the root awdl-guard reads. See README.md.
+set -u
+
+ALLOW_FILE=${AWDL_ALLOW_FILE:-$HOME/.local/state/awdl-guard/allow-until}
+IFCONFIG=${AWDL_IFCONFIG:-/sbin/ifconfig}
+WAIT=${AWDL_WAIT:-6}  # seconds to wait for awdl-guard to act (it checks every 2 s)
+
+die() { echo "awdl: $*" >&2; exit 1; }
+iface_state() { if "$IFCONFIG" awdl0 2>/dev/null | head -1 | grep -q '<UP[,>]'; then echo up; else echo down; fi; }
+guard_running() { pgrep -qf '/awdl-guard( |$)'; }
+
+wait_for() {  # wait_for up|down
+  local i=0
+  guard_running || { echo "warning: awdl-guard isn't running (install it: sudo ./install.sh), nothing will change" >&2; return; }
+  while [ "$i" -lt "$WAIT" ] && [ "$(iface_state)" != "$1" ]; do sleep 1; i=$((i + 1)); done
+  echo "awdl0: $(iface_state)"
+}
+
+cmd=${1:-status}
+case "$cmd" in
+  on)
+    min=${2:-10}
+    case "$min" in '' | *[!0-9]*) die "minutes must be a whole number, got '$min'" ;; esac
+    [ "$min" -ge 1 ] || die "minutes must be at least 1"
+    mkdir -p "$(dirname "$ALLOW_FILE")"
+    until=$(( $(date +%s) + min * 60 ))
+    tmp="$ALLOW_FILE.$$"
+    echo "$until" >"$tmp" && mv -f "$tmp" "$ALLOW_FILE" || die "can't write $ALLOW_FILE"
+    echo "AWDL allowed until $(date -r "$until" '+%H:%M') ($min min) — AirDrop works now"
+    wait_for up
+    ;;
+  off)
+    rm -f "$ALLOW_FILE"
+    echo "AWDL blocked"
+    wait_for down
+    ;;
+  status)
+    if guard_running; then echo "awdl-guard: running"; else echo "awdl-guard: not running"; fi
+    echo "awdl0: $(iface_state)"
+    until=$( [ -f "$ALLOW_FILE" ] && head -c 20 "$ALLOW_FILE" | tr -cd '0-9' )
+    now=$(date +%s)
+    if [ -n "$until" ] && [ "$until" -gt "$now" ]; then
+      echo "allowed: $(( (until - now + 59) / 60 )) min left (until $(date -r "$until" '+%H:%M'))"
+    else
+      echo "allowed: no (blocked)"
+    fi
+    ;;
+  -h | --help | help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown command '$cmd' (on [MINUTES] | off | status)" ;;
+esac
