@@ -1,7 +1,7 @@
 # awdl — keep AWDL off, allow it on demand
 
-A Mac with excellent Wi-Fi can still stutter: pings to the router jump from ~4 ms to 50–130 ms in
-regular bursts. The cause is usually **AWDL** (Apple Wireless Direct Link, interface `awdl0`), the
+A Mac with excellent Wi-Fi can still stutter, and lose a lot of speed: pings to the router jump from
+~4 ms to 50–130 ms in regular bursts, and download throughput can drop by ~40%. The cause is usually **AWDL** (Apple Wireless Direct Link, interface `awdl0`), the
 peer-to-peer Wi-Fi behind AirDrop, Handoff, Universal Control and Sidecar. While `awdl0` is up, the
 Wi-Fi chip keeps leaving your network's channel to rendezvous with nearby Apple devices on AWDL's own
 channels (149 in the US), and your traffic waits until it comes back.
@@ -15,7 +15,30 @@ awdl off       # block it now
 awdl status    # guard running?, awdl0 up/down, minutes left
 ```
 
-## What it fixed (one Mac, 5 GHz, signal −41 dBm, 120 pings at 10/s to the router)
+## What it fixed
+
+Measured on one Mac (MacBook Air, Wi-Fi 6, 2×2) on 5 GHz, 80 MHz, signal around −41 dBm, with a fiber
+line faster than the Wi-Fi link, so the Mac's Wi-Fi is the bottleneck.
+
+### Throughput — macOS `networkQuality -s`
+
+Runs alternated off / on / off / on a few minutes apart (`awdl off` / `awdl on 5`), average of two
+runs each:
+
+| | AWDL off | AWDL on | AWDL on vs off |
+|---|---|---|---|
+| **Download** | **647 Mbps** (656, 639) | **361 Mbps** (358, 363) | **−44%** |
+| **Upload** | **591 Mbps** (601, 581) | **426 Mbps** (428, 423) | **−28%** |
+| Download responsiveness | 642 RPM (650, 633) | 380 RPM (489, 270) | −41% |
+| Upload responsiveness | 824 RPM (688, 960) | 679 RPM (648, 709) | −18% |
+| Idle latency | 62.6 ms (62.5, 62.7) | 94.5 ms (88.0, 100.9) | +51% |
+
+Every off-hop is airtime the Mac can't send or receive in, so throughput suffers as well as latency.
+Download loses more because the router has to hold and resend frames that arrive while the Mac is
+away. (RPM = round-trips per minute under load, higher is better; `networkQuality`'s idle latency
+includes connection setup to Apple's servers, so it reads higher than a plain ping.)
+
+### Latency — 120 pings at 10/s to the router
 
 | | Spikes > 20 ms | Average |
 |---|---|---|
