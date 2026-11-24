@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Installed by install.sh as /Library/LaunchDaemons/io.github.the-dsvolk.awdl-guard.plist;
+     @GUARD@ and @ALLOW_FILE@ are filled in there. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.the-dsvolk.awdl-guard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@GUARD@</string>
+    <string>@ALLOW_FILE@</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

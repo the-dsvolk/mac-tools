@@ -1,0 +1,59 @@
+#!/bin/bash
+# awdl-guard — keep awdl0 (AirDrop / Continuity peer-to-peer Wi-Fi) down, unless allowed for a while.
+#
+# Runs as root under launchd (io.github.the-dsvolk.awdl-guard). Every few seconds it checks awdl0:
+#   - allow file holds a Unix time still in the future  -> bring awdl0 up (AirDrop works)
+#   - otherwise                                         -> take awdl0 down (macOS brings it back on its
+#                                                          own, so this keeps checking, not a one-shot)
+# The allow file is written by the user's `awdl on [minutes]`; nothing else is read from it, and only
+# digits are accepted, so a garbage or missing file simply means "down".
+#
+# Usage: awdl-guard <allow-file>
+# Test knobs: AWDL_GUARD_IFCONFIG (fake ifconfig), AWDL_GUARD_ONCE=1 (one pass), AWDL_GUARD_INTERVAL,
+#             AWDL_GUARD_IFACE, AWDL_GUARD_VERBOSE=1 (also print to stdout), AWDL_GUARD_LOGGER (command
+#             used to log; `true` keeps tests out of the system log).
+# Log: macOS files logger(1) lines under process "logger" and drops the -t tag, so each message starts
+#      with "awdl-guard:" —  log show --last 1h --predicate 'process == "logger" AND eventMessage BEGINSWITH "awdl-guard"'
+set -u
+
+ALLOW_FILE=${1:?usage: awdl-guard <allow-file>}
+IFCONFIG=${AWDL_GUARD_IFCONFIG:-/sbin/ifconfig}
+IFACE=${AWDL_GUARD_IFACE:-awdl0}
+INTERVAL=${AWDL_GUARD_INTERVAL:-2}
+ONCE=${AWDL_GUARD_ONCE:-0}
+LOGGER=${AWDL_GUARD_LOGGER:-logger}
+
+log() {
+  "$LOGGER" -t awdl-guard "awdl-guard: $*" 2>/dev/null
+  [ "${AWDL_GUARD_VERBOSE:-0}" = 1 ] && echo "awdl-guard: $*"
+  return 0
+}
+
+is_up() { "$IFCONFIG" "$IFACE" 2>/dev/null | head -1 | grep -q '<UP[,>]'; }
+
+allowed() {
+  [ -f "$ALLOW_FILE" ] || return 1
+  local until
+  until=$(head -c 20 "$ALLOW_FILE" 2>/dev/null | tr -cd '0-9')
+  [ -n "$until" ] && [ "$until" -gt "$(date +%s)" ]
+}
+
+trap 'exit 0' TERM INT
+[ "$ONCE" = 1 ] || log "started (allow file: $ALLOW_FILE, every ${INTERVAL}s)"
+was_allowed=0
+while :; do
+  if allowed; then
+    if ! is_up; then
+      "$IFCONFIG" "$IFACE" up && log "allowed: $IFACE up"
+    fi
+    was_allowed=1
+  else
+    if is_up; then
+      if [ "$was_allowed" = 1 ]; then why="allow ended"; else why="was up"; fi
+      "$IFCONFIG" "$IFACE" down && log "$IFACE down ($why)"
+    fi
+    was_allowed=0
+  fi
+  [ "$ONCE" = 1 ] && break
+  sleep "$INTERVAL"
+done
