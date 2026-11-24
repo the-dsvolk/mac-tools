@@ -17,8 +17,8 @@ awdl status    # guard running?, awdl0 up/down, minutes left
 
 ## What it fixed
 
-Measured on one Mac (MacBook Air, Wi-Fi 6, 2×2) on 5 GHz, 80 MHz, signal around −41 dBm, with a fiber
-line faster than the Wi-Fi link, so the Mac's Wi-Fi is the bottleneck.
+Measured on one Mac (MacBook Air, Wi-Fi 6, 2×2) on 5 GHz, 80 MHz, signal around −41 dBm, on gigabit
+fiber, so the Mac's Wi-Fi link is the bottleneck.
 
 ### Throughput — macOS `networkQuality -s`
 
